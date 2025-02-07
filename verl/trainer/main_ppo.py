@@ -41,6 +41,8 @@ class RewardManager():
     def __init__(self, tokenizer, num_examine) -> None:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
+        self.max_length = 1024
+        self.moving_std = 1.0
 
     def __call__(self, data: DataProto):
         """We will expand this function gradually based on the available datasets"""
@@ -52,6 +54,7 @@ class RewardManager():
         reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
 
         already_print_data_sources = {}
+        batch_rewards = []
 
         for i in range(len(data)):
             data_item = data[i]  # DataProtoItem
@@ -78,7 +81,13 @@ class RewardManager():
             compute_score_fn = _select_rm_score_fn(data_source)
 
             score = compute_score_fn(solution_str=sequences_str, ground_truth=ground_truth)
-            reward_tensor[i, valid_response_length - 1] = score
+
+            # Length penalty adjustment
+            length_penalty = (1 - valid_response_length / self.max_length) * self.moving_std
+            adjusted_score = score + length_penalty
+
+            reward_tensor[i, valid_response_length - 1] = adjusted_score
+            batch_rewards.append(score)
 
             if data_source not in already_print_data_sources:
                 already_print_data_sources[data_source] = 0
@@ -86,6 +95,10 @@ class RewardManager():
             if already_print_data_sources[data_source] < self.num_examine:
                 already_print_data_sources[data_source] += 1
                 print(sequences_str)
+
+            # Update moving std deviation of rewards
+            if batch_rewards:
+                self.moving_std = torch.std(torch.tensor(batch_rewards, dtype=torch.float32))
 
         return reward_tensor
 
