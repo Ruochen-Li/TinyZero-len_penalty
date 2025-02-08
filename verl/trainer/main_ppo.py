@@ -88,7 +88,7 @@ class RewardManager():
             score = compute_score_fn(solution_str=sequences_str, ground_truth=ground_truth)
 
             # Length penalty (learnable weight applied)
-            length_penalty = 0.05 * (1 - valid_response_length / self.max_length)
+            length_penalty = 0.07 * (1 - valid_response_length / self.max_length)
             
             # Reflection penalty (learnable weight applied)
             # reflection_penalty = self.w_reflection * num_reflections
