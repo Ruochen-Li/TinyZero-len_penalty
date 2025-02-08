@@ -17,6 +17,7 @@ Note that we don't combine the main with ray_trainer as ray_trainer is used by o
 
 from verl import DataProto
 import torch
+import torch.nn as nn
 from verl.utils.reward_score import gsm8k, math, multiply, countdown
 from verl.trainer.ppo.ray_trainer import RayPPOTrainer
 
@@ -33,7 +34,6 @@ def _select_rm_score_fn(data_source):
     else:
         raise NotImplementedError
 
-
 class RewardManager():
     """The reward manager.
     """
@@ -42,7 +42,10 @@ class RewardManager():
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         self.max_length = 1024
-        self.moving_std = 1.0
+
+        # Learnable weights for length and reflection penalties
+        # self.w_length = nn.Parameter(torch.tensor(1.0, dtype=torch.float32))  # Weight for length penalty
+        # self.w_reflection = nn.Parameter(torch.tensor(1.0, dtype=torch.float32))  # Weight for reflection penalty
 
     def __call__(self, data: DataProto):
         """We will expand this function gradually based on the available datasets"""
@@ -54,7 +57,6 @@ class RewardManager():
         reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
 
         already_print_data_sources = {}
-        batch_rewards = []
 
         for i in range(len(data)):
             data_item = data[i]  # DataProtoItem
@@ -80,14 +82,22 @@ class RewardManager():
             data_source = data_item.non_tensor_batch['data_source']
             compute_score_fn = _select_rm_score_fn(data_source)
 
+            # Extract number of reflections from metadata (if available)
+            # num_reflections = data_item.non_tensor_batch.get('num_reflections', 0)
+
             score = compute_score_fn(solution_str=sequences_str, ground_truth=ground_truth)
 
-            # Length penalty adjustment
-            length_penalty = (1 - valid_response_length / self.max_length) * self.moving_std
+            # Length penalty (learnable weight applied)
+            length_penalty = 0.05 * (1 - valid_response_length / self.max_length)
+            
+            # Reflection penalty (learnable weight applied)
+            # reflection_penalty = self.w_reflection * num_reflections
+
+            # Adjust reward
+            # adjusted_score = score + length_penalty - reflection_penalty
             adjusted_score = score + length_penalty
 
             reward_tensor[i, valid_response_length - 1] = adjusted_score
-            batch_rewards.append(score)
 
             if data_source not in already_print_data_sources:
                 already_print_data_sources[data_source] = 0
@@ -96,11 +106,77 @@ class RewardManager():
                 already_print_data_sources[data_source] += 1
                 print(sequences_str)
 
-            # Update moving std deviation of rewards
-            if batch_rewards:
-                self.moving_std = torch.std(torch.tensor(batch_rewards, dtype=torch.float32))
-
         return reward_tensor
+
+# class RewardManager():
+#     """The reward manager.
+#     """
+
+#     def __init__(self, tokenizer, num_examine) -> None:
+#         self.tokenizer = tokenizer
+#         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
+#         self.max_length = 1024
+
+#         # Learnable weights for length and reflection penalties
+#         self.w_length = nn.Parameter(torch.tensor(1.0, dtype=torch.float32))  # Weight for length penalty
+#         self.w_reflection = nn.Parameter(torch.tensor(1.0, dtype=torch.float32))  # Weight for reflection penalty
+
+#     def __call__(self, data: DataProto):
+#         """We will expand this function gradually based on the available datasets"""
+
+#         # If there is rm score, we directly return rm score. Otherwise, we compute via rm_score_fn
+#         if 'rm_scores' in data.batch.keys():
+#             return data.batch['rm_scores']
+
+#         reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
+
+#         already_print_data_sources = {}
+
+#         for i in range(len(data)):
+#             data_item = data[i]  # DataProtoItem
+
+#             prompt_ids = data_item.batch['prompts']
+
+#             prompt_length = prompt_ids.shape[-1]
+
+#             valid_prompt_length = data_item.batch['attention_mask'][:prompt_length].sum()
+#             valid_prompt_ids = prompt_ids[-valid_prompt_length:]
+
+#             response_ids = data_item.batch['responses']
+#             valid_response_length = data_item.batch['attention_mask'][prompt_length:].sum()
+#             valid_response_ids = response_ids[:valid_response_length]
+
+#             # decode
+#             sequences = torch.cat((valid_prompt_ids, valid_response_ids))
+#             sequences_str = self.tokenizer.decode(sequences)
+
+#             ground_truth = data_item.non_tensor_batch['reward_model']['ground_truth']
+
+#             # select rm_score
+#             data_source = data_item.non_tensor_batch['data_source']
+#             compute_score_fn = _select_rm_score_fn(data_source)
+
+#             score = compute_score_fn(solution_str=sequences_str, ground_truth=ground_truth)
+
+#             # Length penalty (learnable weight applied)
+#             length_penalty = self.w_length * (1 - valid_response_length / self.max_length)
+            
+#             # Reflection penalty (learnable weight applied)
+#             reflection_penalty = self.w_reflection * num_reflections
+
+#             # Adjust reward
+#             adjusted_score = score + length_penalty - reflection_penalty
+
+#             reward_tensor[i, valid_response_length - 1] = adjusted_score
+
+#             if data_source not in already_print_data_sources:
+#                 already_print_data_sources[data_source] = 0
+
+#             if already_print_data_sources[data_source] < self.num_examine:
+#                 already_print_data_sources[data_source] += 1
+#                 print(sequences_str)
+
+#         return reward_tensor
 
 
 import ray
