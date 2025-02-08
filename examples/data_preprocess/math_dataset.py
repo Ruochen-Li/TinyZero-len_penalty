@@ -23,6 +23,10 @@ import argparse
 
 from verl.utils.reward_score.math import remove_boxed, last_boxed_only_string
 
+### MODIFIED ###
+from transformers import AutoTokenizer
+tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen2.5-3B')
+### END ###
 
 def extract_solution(solution_str):
     return remove_boxed(last_boxed_only_string(solution_str))
@@ -35,7 +39,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    data_source = 'lighteval/MATH'
+    data_source = 'DigitalLearningGmbH/MATH-lighteval' # 'lighteval/MATH'
 
     dataset = datasets.load_dataset(data_source, trust_remote_code=True)
 
@@ -76,6 +80,16 @@ if __name__ == '__main__':
 
     train_dataset = train_dataset.map(function=make_map_fn('train'), with_indices=True)
     test_dataset = test_dataset.map(function=make_map_fn('test'), with_indices=True)
+
+    def filter_length(example):
+        prompt = example['prompt'][0]['content']
+        tokens = tokenizer.encode(prompt)
+        if 1024 < len(tokens):
+            return False
+        return True
+
+    train_dataset = train_dataset.filter(filter_length)
+    test_dataset = test_dataset.filter(filter_length)
 
     local_dir = args.local_dir
     hdfs_dir = args.hdfs_dir
