@@ -81,6 +81,7 @@ if __name__ == '__main__':
     train_dataset = train_dataset.map(function=make_map_fn('train'), with_indices=True)
     test_dataset = test_dataset.map(function=make_map_fn('test'), with_indices=True)
 
+### MODIFIED ###
     def filter_length(example):
         prompt = example['prompt'][0]['content']
         tokens = tokenizer.encode(prompt)
@@ -90,6 +91,7 @@ if __name__ == '__main__':
 
     train_dataset = train_dataset.filter(filter_length)
     test_dataset = test_dataset.filter(filter_length)
+### END ###
 
     local_dir = args.local_dir
     hdfs_dir = args.hdfs_dir

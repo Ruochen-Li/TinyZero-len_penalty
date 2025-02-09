@@ -13,6 +13,7 @@
 # limitations under the License.
 # Adapted from https://github.com/EleutherAI/lm-evaluation-harness/blob/main/lm_eval/tasks/hendrycks_math/utils.py
 
+import random
 
 def compute_score(solution_str, ground_truth) -> float:
     retval = 0.
@@ -24,6 +25,14 @@ def compute_score(solution_str, ground_truth) -> float:
                 retval = 1.
     except Exception as e:
         print(e)
+
+### MODIFIED ###
+    do_print = random.randint(1, 64) == 1
+    if do_print:
+        print(f"--------------------------------")
+        print(f"Target: {ground_truth} | Numbers: {answer}")
+        print(f"Solution string: {solution_str}")
+### END ###
 
     return retval
 
