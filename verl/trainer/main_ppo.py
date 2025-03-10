@@ -42,6 +42,9 @@ class RewardManager():
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         self.max_length = 1024
+        self.n_step = 0
+        self.acc_avg = 0
+        self.preset_acc = 0.92
 
         # Learnable weights for length and reflection penalties
         # self.w_length = nn.Parameter(torch.tensor(1.0, dtype=torch.float32))  # Weight for length penalty
@@ -60,6 +63,7 @@ class RewardManager():
 
         for i in range(len(data)):
             data_item = data[i]  # DataProtoItem
+            print(data_item)
 
             prompt_ids = data_item.batch['prompts']
 
@@ -86,16 +90,25 @@ class RewardManager():
             # num_reflections = data_item.non_tensor_batch.get('num_reflections', 0)
 
             score = compute_score_fn(solution_str=sequences_str, ground_truth=ground_truth)
+            self.n_step += 1 # or the batch size
+            self.acc_avg += 1 / self.n_step * (score - self.acc_avg)
+            alpha = 0.8 + 0.2 * max(0, (self.preset_acc - self.acc_avg) / self.preset_acc)
 
             # Length penalty (learnable weight applied)
-            length_penalty = 0.07 * (1 - valid_response_length / self.max_length)
+            # length_penalty = 0.07 * (1 - valid_response_length / self.max_length)
+            length_penalty = (1 - valid_response_length / self.max_length)
+            beta = 0.1 * min(1, 1 - (self.preset_acc - self.acc_avg) / self.preset_acc)
             
             # Reflection penalty (learnable weight applied)
             # reflection_penalty = self.w_reflection * num_reflections
 
             # Adjust reward
             # adjusted_score = score + length_penalty - reflection_penalty
-            adjusted_score = score + length_penalty
+            # adjusted_score = score + length_penalty
+            adjusted_score = alpha * score + beta * length_penalty
+            print(alpha, score)
+            print(beta, length_penalty)
+            input()
 
             reward_tensor[i, valid_response_length - 1] = adjusted_score
 
