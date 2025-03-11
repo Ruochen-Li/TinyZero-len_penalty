@@ -21,6 +21,8 @@ import torch.nn as nn
 from verl.utils.reward_score import gsm8k, math, multiply, countdown
 from verl.trainer.ppo.ray_trainer import RayPPOTrainer
 
+from verl.utils.tracking import Tracking
+from omegaconf import OmegaConf
 
 def _select_rm_score_fn(data_source):
     if data_source == 'openai/gsm8k':
@@ -38,13 +40,19 @@ class RewardManager():
     """The reward manager.
     """
 
-    def __init__(self, tokenizer, num_examine) -> None:
+    def __init__(self, tokenizer, num_examine, config, name) -> None:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         self.max_length = 1024
         self.n_step = 0
         self.acc_avg = 0
         self.preset_acc = 0.92
+        self.config = config
+        self.logger = Tracking(project_name=self.config.trainer.project_name,
+                               experiment_name=self.config.trainer.experiment_name,
+                               default_backend=self.config.trainer.logger,
+                               config=OmegaConf.to_container(self.config, resolve=True))
+        self.name = name
 
         # Learnable weights for length and reflection penalties
         # self.w_length = nn.Parameter(torch.tensor(1.0, dtype=torch.float32))  # Weight for length penalty
@@ -63,7 +71,7 @@ class RewardManager():
 
         for i in range(len(data)):
             data_item = data[i]  # DataProtoItem
-            print(data_item)
+#            print(data_item)
 
             prompt_ids = data_item.batch['prompts']
 
@@ -106,9 +114,17 @@ class RewardManager():
             # adjusted_score = score + length_penalty - reflection_penalty
             # adjusted_score = score + length_penalty
             adjusted_score = alpha * score + beta * length_penalty
-            print(alpha, score)
-            print(beta, length_penalty)
-            input()
+#            print(alpha, score)
+#            print(beta, length_penalty)
+            log_data = {
+                f'{self.name}/accuracy': self.acc_avg,
+                f'{self.name}/alpha': alpha,
+                f'{self.name}/beta': beta,
+                f'{self.name}/score': score,
+                f'{self.name}/length_penalty': length_penalty,
+                f'{self.name}/reward': adjusted_score,
+            }
+            self.logger.log(data=log_data, step=self.n_step)
 
             reward_tensor[i, valid_response_length - 1] = adjusted_score
 
@@ -273,10 +289,10 @@ def main_task(config):
         role_worker_mapping[Role.RewardModel] = ray.remote(RewardModelWorker)
         mapping[Role.RewardModel] = global_pool_id
 
-    reward_fn = RewardManager(tokenizer=tokenizer, num_examine=0)
+    reward_fn = RewardManager(tokenizer=tokenizer, num_examine=0, config=config, name='reward_fn')
 
     # Note that we always use function-based RM for validation
-    val_reward_fn = RewardManager(tokenizer=tokenizer, num_examine=1)
+    val_reward_fn = RewardManager(tokenizer=tokenizer, num_examine=1, config=config, name='val_reward_fn')
 
     resource_pool_manager = ResourcePoolManager(resource_pool_spec=resource_pool_spec, mapping=mapping)
 
