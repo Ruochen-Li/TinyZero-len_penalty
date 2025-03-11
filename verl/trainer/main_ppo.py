@@ -47,12 +47,12 @@ class RewardManager():
         self.n_step = 0
         self.acc_avg = 0
         self.preset_acc = 0.92
-        self.config = config
-        self.logger = Tracking(project_name=self.config.trainer.project_name,
-                               experiment_name=self.config.trainer.experiment_name,
-                               default_backend=self.config.trainer.logger,
-                               config=OmegaConf.to_container(self.config, resolve=True))
-        self.name = name
+#        self.config = config
+#        self.logger = Tracking(project_name=self.config.trainer.project_name,
+#                               experiment_name=self.config.trainer.experiment_name,
+#                               default_backend=self.config.trainer.logger,
+#                               config=OmegaConf.to_container(self.config, resolve=True))
+#        self.name = name
 
         # Learnable weights for length and reflection penalties
         # self.w_length = nn.Parameter(torch.tensor(1.0, dtype=torch.float32))  # Weight for length penalty
@@ -100,12 +100,13 @@ class RewardManager():
             score = compute_score_fn(solution_str=sequences_str, ground_truth=ground_truth)
             self.n_step += 1 # or the batch size
             self.acc_avg += 1 / self.n_step * (score - self.acc_avg)
-            alpha = 0.8 + 0.2 * max(0, (self.preset_acc - self.acc_avg) / self.preset_acc)
+            acc_diff_ratio = (self.preset_acc - self.acc_avg) / self.preset_acc # [-infinity, 1]
+            alpha = 0.8 + 0.2 * max(0, acc_diff_ratio)
 
             # Length penalty (learnable weight applied)
             # length_penalty = 0.07 * (1 - valid_response_length / self.max_length)
             length_penalty = (1 - valid_response_length / self.max_length)
-            beta = 0.1 * min(1, 1 - (self.preset_acc - self.acc_avg) / self.preset_acc)
+            beta = 0.1 * min(1, 1 - acc_diff_ratio)
             
             # Reflection penalty (learnable weight applied)
             # reflection_penalty = self.w_reflection * num_reflections
@@ -114,17 +115,18 @@ class RewardManager():
             # adjusted_score = score + length_penalty - reflection_penalty
             # adjusted_score = score + length_penalty
             adjusted_score = alpha * score + beta * length_penalty
+            # adjusted_score = score
 #            print(alpha, score)
 #            print(beta, length_penalty)
-            log_data = {
-                f'{self.name}/accuracy': self.acc_avg,
-                f'{self.name}/alpha': alpha,
-                f'{self.name}/beta': beta,
-                f'{self.name}/score': score,
-                f'{self.name}/length_penalty': length_penalty,
-                f'{self.name}/reward': adjusted_score,
-            }
-            self.logger.log(data=log_data, step=self.n_step)
+#            log_data = {
+#                f'{self.name}/accuracy': self.acc_avg,
+#                f'{self.name}/alpha': alpha,
+#                f'{self.name}/beta': beta,
+#                f'{self.name}/score': score,
+#                f'{self.name}/length_penalty': length_penalty,
+#                f'{self.name}/reward': adjusted_score,
+#            }
+#            self.logger.log(data=log_data, step=self.n_step)
 
             reward_tensor[i, valid_response_length - 1] = adjusted_score
 
