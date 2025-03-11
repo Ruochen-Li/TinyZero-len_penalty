@@ -17,6 +17,7 @@ import random
 
 def compute_score(solution_str, ground_truth) -> float:
     retval = 0.
+    answer = 'None'
     try:
         string_in_last_boxed = last_boxed_only_string(solution_str)
         if string_in_last_boxed is not None:
