@@ -40,7 +40,7 @@ class RewardManager():
     """The reward manager.
     """
 
-    def __init__(self, tokenizer, num_examine, config, name) -> None:
+    def __init__(self, tokenizer, num_examine) -> None:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         self.max_length = 1024
@@ -262,6 +262,7 @@ def main_task(config):
     # print initial config
     from pprint import pprint
     from omegaconf import OmegaConf
+    import json
     pprint(OmegaConf.to_container(config, resolve=True))  # resolve=True will eval symbol values
     OmegaConf.resolve(config)
 
@@ -323,25 +324,29 @@ def main_task(config):
         role_worker_mapping[Role.RewardModel] = ray.remote(RewardModelWorker)
         mapping[Role.RewardModel] = global_pool_id
 
-    reward_fn = RewardManager(tokenizer=tokenizer, num_examine=0)
+#    reward_fn = RewardManager(tokenizer=tokenizer, num_examine=0)
 
     # Note that we always use function-based RM for validation
-    val_reward_fn = RewardManager(tokenizer=tokenizer, num_examine=1)
-#    reward_manager_name = config.reward_model.get("reward_manager", "naive")
-#    if reward_manager_name == 'naive':
-#        from verl.workers.reward_manager import NaiveRewardManager
-#        reward_manager_cls = NaiveRewardManager
-#    elif reward_manager_name == 'prime':
-#        from verl.workers.reward_manager import PrimeRewardManager
-#        reward_manager_cls = PrimeRewardManager
-#    else:
-#        raise NotImplementedError
-#
-#    compute_score = get_custom_reward_fn(config)
-#    reward_fn = reward_manager_cls(tokenizer=tokenizer, num_examine=0, compute_score=compute_score)
-#
-#    # Note that we always use function-based RM for validation
-#    val_reward_fn = reward_manager_cls(tokenizer=tokenizer, num_examine=1, compute_score=compute_score)
+#    val_reward_fn = RewardManager(tokenizer=tokenizer, num_examine=1)
+
+    reward_manager_name = config.reward_model.get("reward_manager", "naive")
+    if reward_manager_name == 'naive':
+        from verl.workers.reward_manager import NaiveRewardManager
+        reward_manager_cls = NaiveRewardManager
+    elif reward_manager_name == 'prime':
+        from verl.workers.reward_manager import PrimeRewardManager
+        reward_manager_cls = PrimeRewardManager
+    elif reward_manager_name == 'length_penalty':
+        from verl.workers.reward_manager import LPRewardManager
+        reward_manager_cls = LPRewardManager
+    else:
+        raise NotImplementedError
+
+    compute_score = get_custom_reward_fn(config)
+    reward_fn = reward_manager_cls(tokenizer=tokenizer, num_examine=0, compute_score=compute_score)
+
+    # Note that we always use function-based RM for validation
+    val_reward_fn = reward_manager_cls(tokenizer=tokenizer, num_examine=1, compute_score=compute_score)
 
     resource_pool_manager = ResourcePoolManager(resource_pool_spec=resource_pool_spec, mapping=mapping)
 

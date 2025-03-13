@@ -634,8 +634,10 @@ class RayPPOTrainer(object):
         sample_outputs = []
         sample_scores = []
 
+        print('validation dataloader length:', len(self.val_dataloader), flush=True)
         for test_data in self.val_dataloader:
             test_batch = DataProto.from_single_dict(test_data)
+            print('validation batch size:', len(test_batch), flush=True)
 
             # we only do validation on rule-based rm
             if self.config.reward_model.enable and test_batch[0].non_tensor_batch['reward_model']['style'] == 'model':
@@ -670,7 +672,6 @@ class RayPPOTrainer(object):
             test_output_gen_batch_padded = self.actor_rollout_wg.generate_sequences(test_gen_batch_padded)
             # unpad
             test_output_gen_batch = unpad_dataproto(test_output_gen_batch_padded, pad_size=pad_size)
-            print('validation generation end')
 
             # Store generated outputs
             output_ids = test_output_gen_batch.batch['responses']
@@ -995,7 +996,7 @@ class RayPPOTrainer(object):
                             batch = batch.union(reward_tensor)
 
                         # we combine with rule-based rm
-                        reward_tensor = self.reward_fn(batch)
+                        reward_tensor = self.reward_fn(batch, list(val_metrics.values())[0])
                         batch.batch['token_level_scores'] = reward_tensor
 
                         # compute rewards. apply_kl_penalty if available

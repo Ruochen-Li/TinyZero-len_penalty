@@ -1,5 +1,3 @@
-set -x
-
 python3 -m verl.trainer.main_ppo_ori \
 algorithm.adv_estimator=grpo \
 data.train_files=$DATA_DIR/train.parquet \
