@@ -26,7 +26,7 @@ class LPRewardManager:
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         self.compute_score = compute_score or _default_compute_score
         self.max_length = 3072
-        self.preset_acc = 0.92
+        self.preset_acc = 0.74
 
     def verify(self, data):
         scores = []
@@ -109,10 +109,11 @@ class LPRewardManager:
 
             # apply length_penalty only during training
             if -1 != val_acc:
-                length_penalty = (1 - valid_response_length / self.max_length)
-                acc_diff_ratio = max(0, (self.preset_acc - val_acc) / self.preset_acc) # [0,1]
-                alpha = 0.9 + 0.1 * acc_diff_ratio
-                score = score * alpha + 0.1 * length_penalty * ((1 - acc_diff_ratio) ** 8)
+                acc_ratio = min(1, val_acc / self.preset_acc) # [0,1]
+                alpha = 0.9 + 0.1 * (1 - acc_ratio)
+                length_ratio = min(1, valid_response_length / self.max_length) # [0,1]
+                length_reward = 1 - min(acc_ratio ** 8, length_ratio)
+                score = score * alpha + 0.1 * length_reward
 
             #reward_tensor[i, valid_response_length - 1] = score
             reward_tensor[i, valid_response_length - 1] = score
@@ -128,3 +129,4 @@ class LPRewardManager:
                 print("[score]", score)
 
         return reward_tensor
+
