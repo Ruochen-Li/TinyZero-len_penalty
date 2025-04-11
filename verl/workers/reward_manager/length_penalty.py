@@ -16,6 +16,9 @@ from verl import DataProto
 from verl.utils.reward_score import _default_compute_score
 import torch
 
+from lighteval.metrics import Metrics
+from lighteval.tasks.requests import Doc
+from lighteval.utils.language import Language
 
 class LPRewardManager:
     """The reward manager.
@@ -24,7 +27,8 @@ class LPRewardManager:
     def __init__(self, tokenizer, num_examine, compute_score=None) -> None:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
-        self.compute_score = compute_score or _default_compute_score
+#        self.compute_score = compute_score or _default_compute_score
+        self.compute_score = compute_score or Metrics.latex_gold_metric
         self.max_length = 3072
         self.preset_acc = 0.74
 
@@ -54,12 +58,12 @@ class LPRewardManager:
 
             extra_info = data_item.non_tensor_batch.get('extra_info', None)
 
-            score = self.compute_score(
+            score = self.compute_score.compute(
                 data_source=data_source,
                 solution_str=response_str,
                 ground_truth=ground_truth,
                 extra_info=extra_info,
-            )
+            ).values()[0]
 
             scores.append(score)
         data.batch['acc'] = torch.tensor(scores, dtype=torch.float32, device=prompt_ids.device)
@@ -100,12 +104,24 @@ class LPRewardManager:
 
             extra_info = data_item.non_tensor_batch.get('extra_info', None)
 
-            score = self.compute_score(
-                data_source=data_source,
-                solution_str=response_str,
-                ground_truth=ground_truth,
-                extra_info=extra_info,
+            doc = Doc(
+                task_name='lp',
+                query=prompt_ids,
+                choices=[ground_truth],
+                gold_index=0,
             )
+            score = self.compute_score.compute(
+                golds=[ground_truth],
+                predictions=[response_str],
+                formatted_doc=doc
+            ).values()[0]
+
+#            score = self.compute_score(
+#                data_source=data_source,
+#                solution_str=response_str,
+#                ground_truth=ground_truth,
+#                extra_info=extra_info,
+#            )
 
             # apply length_penalty only during training
             if -1 != val_acc:
