@@ -16,7 +16,11 @@ from verl import DataProto
 from verl.utils.reward_score import _default_compute_score
 import torch
 
-from lighteval.metrics import Metrics
+from lighteval.metrics.dynamic_metrics import (
+    ExprExtractionConfig,
+    LatexExtractionConfig,
+    multilingual_extractive_match_metric,
+)
 from lighteval.tasks.requests import Doc
 from lighteval.utils.language import Language
 
@@ -28,9 +32,19 @@ class LPRewardManager:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
 #        self.compute_score = compute_score or _default_compute_score
-        self.compute_score = compute_score or Metrics.latex_gold_metric
         self.max_length = 3072
         self.preset_acc = 0.74
+
+        latex_gold_metric = multilingual_extractive_match_metric(
+            language=Language.ENGLISH,
+            fallback_mode="first_match",
+            precision=5,
+            gold_extraction_target=(LatexExtractionConfig(),),
+            # Match boxed first before trying other regexes
+            pred_extraction_target=(ExprExtractionConfig(), LatexExtractionConfig(boxed_match_priority=0)),
+            aggregation_function=max,
+        )
+        self.compute_score = compute_score or latex_gold_metric
 
     def verify(self, data):
         scores = []
@@ -63,7 +77,7 @@ class LPRewardManager:
                 solution_str=response_str,
                 ground_truth=ground_truth,
                 extra_info=extra_info,
-            ).values()[0]
+            )
 
             scores.append(score)
         data.batch['acc'] = torch.tensor(scores, dtype=torch.float32, device=prompt_ids.device)
@@ -82,6 +96,8 @@ class LPRewardManager:
 
         for i in range(len(data)):
             data_item = data[i]  # DataProtoItem
+            print(data_item)
+            input()
 
             prompt_ids = data_item.batch['prompts']
 
@@ -114,7 +130,8 @@ class LPRewardManager:
                 golds=[ground_truth],
                 predictions=[response_str],
                 formatted_doc=doc
-            ).values()[0]
+            )
+            score = list(score.values())[0]
 
 #            score = self.compute_score(
 #                data_source=data_source,
@@ -128,8 +145,8 @@ class LPRewardManager:
                 acc_ratio = min(1, val_acc / self.preset_acc) # [0,1]
                 alpha = 0.9 + 0.1 * (1 - acc_ratio)
                 length_ratio = min(1, valid_response_length / self.max_length) # [0,1]
-                length_reward = 1 - min(acc_ratio ** 8, length_ratio)
-                score = score * alpha + 0.1 * length_reward
+                length_reward = 1 - min(acc_ratio ** 128, length_ratio)
+                score = score * alpha + 1e-7 * length_reward
 
             #reward_tensor[i, valid_response_length - 1] = score
             reward_tensor[i, valid_response_length - 1] = score
