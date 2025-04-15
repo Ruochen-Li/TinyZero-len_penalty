@@ -13,11 +13,9 @@
 # limitations under the License.
 # Adapted from https://github.com/EleutherAI/lm-evaluation-harness/blob/main/lm_eval/tasks/hendrycks_math/utils.py
 
-import random
 
 def compute_score(solution_str, ground_truth) -> float:
     retval = 0.
-    answer = 'None'
     try:
         string_in_last_boxed = last_boxed_only_string(solution_str)
         if string_in_last_boxed is not None:
@@ -26,14 +24,6 @@ def compute_score(solution_str, ground_truth) -> float:
                 retval = 1.
     except Exception as e:
         print(e)
-
-### MODIFIED ###
-    do_print = random.randint(1, 64) == 1
-    if do_print:
-        print(f"--------------------------------")
-        print(f"Target: {ground_truth} | Numbers: {answer}")
-        print(f"Solution string: {solution_str}")
-### END ###
 
     return retval
 

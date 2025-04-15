@@ -14,4 +14,6 @@
 
 from .naive import NaiveRewardManager
 from .prime import PrimeRewardManager
+from .batch import BatchRewardManager
+from .dapo import DAPORewardManager
 from .length_penalty import LPRewardManager
