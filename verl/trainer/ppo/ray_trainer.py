@@ -912,7 +912,11 @@ class RayPPOTrainer(object):
                         # we combine with rule-based rm
                         reward_extra_infos_dict: dict[str, list]
                         try:
-                            reward_result = self.reward_fn(batch, return_dict=True)
+                            reward_result = self.reward_fn(
+                                batch,
+                                return_dict=True,
+                                validation_acc=list(val_metrics.values())[0]
+                            )
                             reward_tensor = reward_result['reward_tensor']
                             reward_extra_infos_dict = reward_result['reward_extra_info']
                         except Exception as e:
